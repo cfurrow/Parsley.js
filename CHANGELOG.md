@@ -1,5 +1,9 @@
 #Changelog
 
+** 1.1.1 **
+
+    - added greaterthan and lessthan to parsley.extend.js
+
 ** 1.1.0 **
 
     - added localization and extra validator configuration in external files.
