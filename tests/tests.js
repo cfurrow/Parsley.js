@@ -47,14 +47,9 @@ $( '#validator-tests' ).parsley( {
     multiple: function ( val, multiple ) {
       return val % multiple === 0;
     }
-    ,greaterthan: function(val, elemid){
-      return new Number(val) > new Number($(elemid).val());
-    } 
   }
   , messages: {
       multiple: 'This field should be a multiple of %s'
-    , greaterthan: 'This value should be greater than %s.'
-
   }
 } );
 
@@ -66,8 +61,11 @@ $( '#onFieldValidate-form' ).parsley( { listeners: {
 
     return false;
   },
-  onFieldError: function ( field, constraint ) {
-    $( field ).addClass( 'error-' + constraint.name + '_' + constraint.requirements );
+  onFieldError: function ( field, constraints ) {
+    $( field ).addClass( 'error-' + constraints[ 0 ].name + '_' + constraints[ 0 ].requirements );
+  },
+  onFieldSuccess: function ( field ) {
+    $( field ).addClass( 'success-foo-bar' );
   },
   onFormSubmit: function ( isFormValid, event, focusField ) {
     $( '#onFieldValidate-form' ).addClass( 'this-form-is-invalid' );
@@ -202,6 +200,15 @@ var testSuite = function () {
         triggerSubmitValidation( '#required-html5', '  foo' );
         expect( $( '#required-html5' ).hasClass( 'parsley-success' ) ).to.be( true );
       } )
+      it ( 'required - html5-api bis', function () {
+        triggerSubmitValidation( '#required-html5-bis', '' );
+        expect( $( '#required-html5-bis' ).hasClass( 'parsley-error' ) ).to.be( true );
+        expect( getErrorMessage( '#required-html5-bis', 'required') ).to.be( 'This value is required.' );
+        triggerSubmitValidation( '#required-html5-bis', '  ' );
+        expect( $( '#required-html5-bis' ).hasClass( 'parsley-error' ) ).to.be( true );
+        triggerSubmitValidation( '#required-html5-bis', '  foo' );
+        expect( $( '#required-html5-bis' ).hasClass( 'parsley-success' ) ).to.be( true );
+      } )
       it ( 'minlength', function () {
         triggerSubmitValidation( '#minlength', '12345' );
         expect( $( '#minlength' ).hasClass( 'parsley-error' ) ).to.be( true );
@@ -229,6 +236,14 @@ var testSuite = function () {
         expect( getErrorMessage( '#min', 'min') ).to.be( 'This value should be greater than 10.' );
         triggerSubmitValidation( '#min', '12' );
         expect( $( '#min' ).hasClass( 'parsley-success' ) ).to.be( true );
+      } )
+      it ( 'min html5', function () {
+        triggerSubmitValidation( '#min-html5', 12 );
+        expect( $( '#min-html5' ).hasClass( 'parsley-success' ) ).to.be( true );
+      } )
+      it ( 'max html5', function () {
+        triggerSubmitValidation( '#max-html5', 8 );
+        expect( $( '#max-html5' ).hasClass( 'parsley-success' ) ).to.be( true );
       } )
       it ( 'max', function () {
         triggerSubmitValidation( '#max', '12' );
@@ -265,6 +280,8 @@ var testSuite = function () {
         , { url: "foo", expected: false, strict: false }
         , { url: "foo:bar", expected: false, strict: false }
         , { url: "foo://bar", expected: false, strict: false }
+
+        // absolutely finish by false to test error message
         , { url: "ého", expected: false, strict: false }
       ];
 
@@ -275,6 +292,10 @@ var testSuite = function () {
         }
         triggerSubmitValidation( '#typeurl', 'foo' );
         expect( getErrorMessage( '#typeurl', 'type') ).to.be( 'This value should be a valid url.' );
+      } )
+      it ( 'url html5', function () {
+        $( '#typeurl-html5' ).val( "http://foo.bar" );
+        expect( $( '#typeurl-html5' ).parsley( 'validate' ) ).to.be( true );
       } )
       it ( 'url strict + global config overriding type message', function () {
         for ( var i in urls ) {
@@ -296,6 +317,14 @@ var testSuite = function () {
         expect( $( '#typeemail' ).hasClass( 'parsley-success' ) ).to.be( true );
         triggerSubmitValidation( '#typeemail', 'foo.bar@bar.com.ext' );
         expect( $( '#typeemail' ).hasClass( 'parsley-success' ) ).to.be( true );
+      } )
+      it ( 'email html5', function () {
+        triggerSubmitValidation( '#typeemail-html5', 'foo@bar.com' );
+        expect( $( '#typeemail-html5' ).hasClass( 'parsley-success' ) ).to.be( true );
+      } )
+      it ( 'range html5', function () {
+        triggerSubmitValidation( '#typerange-html5', 8 );
+        expect( $( '#typerange-html5' ).hasClass( 'parsley-success' ) ).to.be( true );
       } )
       it ( 'digits', function () {
         triggerSubmitValidation( '#typedigits', 'foo' );
@@ -513,10 +542,10 @@ var testSuite = function () {
         $( '#scenario-keyup-when-notvalid' ).trigger( $.Event( 'keyup' ) );
         expect( $( '#scenario-keyup-when-notvalid' ).hasClass( 'parsley-success' ) ).to.be( true );
 
-        // than keypress event is no more listened, cuz' field passed previously validation, wait next change event..
+        // than keypress is alaways listened, to avoid false values with success classes, until real trigger event is fired..
         $( '#scenario-keyup-when-notvalid' ).val( 'foo@bar' );
         $( '#scenario-keyup-when-notvalid' ).trigger( $.Event( 'keyup' ) );
-        expect( $( '#scenario-keyup-when-notvalid' ).hasClass( 'parsley-success' ) ).to.be( true );
+        expect( $( '#scenario-keyup-when-notvalid' ).hasClass( 'parsley-success' ) ).to.be( false );
       } )
     } )
 
@@ -568,6 +597,11 @@ var testSuite = function () {
         it ( 'test onFieldError()', function () {
           expect( $( '#onFieldValidate2' ).hasClass( 'error-type_email' ) ).to.be( true );
         } )
+        it ( 'test onFieldSuccess()', function () {
+          $( '#onFieldValidate2' ).val( 'foo@baz.baz' );
+          $( '#onFieldValidate-form' ).parsley( 'validate' );
+          expect( $( '#onFieldValidate2' ).hasClass( 'success-foo-bar' ) ).to.be( true );
+        } )
         it ( 'test addListener onFormSubmit', function () {
           $( '#listeners1' ).val( 'foo' );
           expect( $( '#listeners-form' ).hasClass( 'onFormSubmit-ok' ) ).to.be( false );
@@ -588,6 +622,27 @@ var testSuite = function () {
             expect( $( '#addListenerFieldValidate-field' ).hasClass( 'listener-ok' ) ).to.be( true );
           } )
         } )
+      } )
+      describe ( 'Test some typical use cases with listeners', function () {
+        it( 'Test onFieldValidate could reset Parsley validation with return true;', function () {
+           $( '#onFieldValidatetrue' ).val( 'foo@bar.com' );
+           expect( $( '#onFieldValidatetrue-form' ).parsley( 'validate' ) ).to.be( false );
+
+           // do not validate #onFieldValidatefalse
+           $( '#onFieldValidatetrue-form' ).parsley( 'addListener', {
+             onFieldValidate: function ( elem ) {
+               console.log( $( elem ).attr( 'id' ) )
+               if ( $( elem ).attr( 'id' ) === "onFieldValidatefalse" ) {
+                 return true;
+               }
+
+               return false;
+             }
+           } )
+
+           // even with #onFieldValidatefalse invalid, validation is ok
+           expect( $( '#onFieldValidatetrue-form' ).parsley( 'validate' ) ).to.be( true );
+         } )
       } )
     } )
 

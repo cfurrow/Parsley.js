@@ -1,8 +1,17 @@
 #Changelog
 
+** 1.1.3 **
+
+    - fixed bug on onFieldValidate listener that do not reseted Parsley validation
+      on return = false;
+
+** 1.1.2 **
+
+    - added html5 types supports for existing validators
+
 ** 1.1.1 **
 
-    - added greaterthan and lessthan to parsley.extend.js
+    - two new parsley.extra validators: greaterthan & lowerthen
 
 ** 1.1.0 **
 

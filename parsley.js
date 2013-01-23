@@ -129,11 +129,11 @@
       }
 
       , min: function ( val, min ) {
-        return val >= min;
+        return new Number( val ) >= new Number( min );
       }
 
       , max: function ( val, max ) {
-        return val <= max;
+        return new Number( val ) <= new Number( max );
       }
 
       , range: function ( val, arrayRange ) {
@@ -234,7 +234,7 @@
         return message;
       }
 
-      return message.replace(new RegExp("%s", "i"), args);
+      return message.replace(new RegExp( "%s", "i" ), args);
     }
 
     /**
@@ -312,10 +312,7 @@
       this.hash = this.generateHash();
       this.errorClassHandler = this.options.errors.classHandler( element ) || this.$element;
 
-      // a field is required if data-required="true" or class="required" or required="required"
-      if ( 'undefined' !== typeof this.options[ 'required' ] || this.$element.hasClass( 'required' ) || this.$element.attr( 'required' ) === 'required' ) {
-        this.isRequired = this.options[ 'required' ] = true;
-      }
+      this.bindHtml5Constraints();
 
       // bind validators to field
       this.addConstraints();
@@ -323,6 +320,37 @@
       // bind parsley events if validators have been registered
       if ( this.constraints.length ) {
         this.bindValidationEvents();
+      }
+    }
+
+    /**
+    * Bind some extra html5 types / validators
+    *
+    * @method bindHtml5Constraints
+    */
+    , bindHtml5Constraints: function () {
+      // add html5 required support + class required support
+      if ( this.$element.hasClass( 'required' ) || this.$element.attr( 'required' ) ) {
+        this.options.required = true;
+      }
+
+      // add html5 supported types & options
+      if ( 'undefined' !== typeof this.$element.attr( 'type' ) && new RegExp( this.$element.attr( 'type' ), "i" ).test( "email url number range" ) ) {
+        this.options.type = this.$element.attr( 'type' );
+
+        // number and range types could have min and/or max values
+        if ( new RegExp( this.options.type, "i" ).test( "number range" ) ) {
+          this.options.type = "number";
+
+          // double condition to support jQuery and Zepto.. :(
+          if ( 'undefined' !== typeof this.$element.attr( 'min' ) && this.$element.attr( 'min' ).length ) {
+            this.options.min = this.$element.attr( 'min' );
+          }
+
+          if ( 'undefined' !== typeof this.$element.attr( 'max' ) && this.$element.attr( 'max' ).length ) {
+            this.options.max = this.$element.attr( 'max' );
+          }
+        }
       }
     }
 
@@ -339,6 +367,10 @@
             , requirements: this.options[ constraint ]
             , isValid: null
           } );
+
+          if ( constraint === "required" ) {
+            this.isRequired = true;
+          }
         }
       }
     }
@@ -413,8 +445,8 @@
     , eventValidation: function ( event ) {
       var val = this.getVal();
 
-      // do nothing on keypress event if not explicitely passed as data-trigger and if field has no errors
-      if ( event.type === 'keyup' && !/keyup/i.test( this.options.trigger ) && this.isValid ) {
+      // do nothing on keypress event if not explicitely passed as data-trigger and if field has not already been validated once
+      if ( event.type === 'keyup' && !/keyup/i.test( this.options.trigger ) && !this.validatedOnce ) {
         return true;
       }
 
@@ -448,14 +480,15 @@
       var val = this.getVal()
         , isValid = null;
 
+      // reset Parsley validation if onFieldValidate returns true, or if field is empty and not required
+      if ( this.options.listeners.onFieldValidate( this.element ) || ( '' === val && !this.isRequired ) ) {
+        this.reset();
+        return null;
+      }
+
       // do not validate a field already validated and unchanged !
       if ( !this.needsValidation( val ) ) {
         return this.isValid;
-      }
-
-      if ( this.options.listeners.onFieldValidate( this.$element ) || '' === this.val && !this.isRequired ) {
-        this.reset();
-        return null;
       }
 
       this.errorBubbling = 'undefined' !== typeof errorBubbling ? errorBubbling : true;
@@ -470,6 +503,13 @@
       return isValid;
     }
 
+    /**
+    * Check if value has changed since previous validation
+    *
+    * @method needsValidation
+    * @param value
+    * @return {Boolean}
+    */
     , needsValidation: function ( val ) {
       if ( this.val === val && this.validatedOnce ) {
         return false;
@@ -504,6 +544,14 @@
       return isValid;
     }
 
+    /**
+    * Update a constraint state. Curently used by remote async validator
+    *
+    * @method updateConstraint
+    * @param constraintName
+    * @param property
+    * @param value
+    */
     , updateConstraint: function ( constraintName, property, value ) {
       for ( var i in this.constraints ) {
         if ( this.constraints[ i ].name === constraintName ) {
@@ -528,7 +576,6 @@
       for ( var constraint in this.constraints ) {
         if ( false === this.constraints[ constraint ].isValid ) {
           this.addError( this.constraints[ constraint ] );
-          this.options.listeners.onFieldError( this.$element, this.constraints[ constraint ] );
           isValid = false;
         } else if ( true === this.constraints[ constraint ].isValid ) {
           this.removeError( this.constraints[ constraint ].name );
@@ -541,9 +588,11 @@
       if ( true === this.isValid ) {
         this.removeErrors();
         this.errorClassHandler.removeClass( this.options.errorClass ).addClass( this.options.successClass );
+        this.options.listeners.onFieldSuccess( this.element, this.constraints );
         return true;
       } else if ( false === this.isValid ) {
         this.errorClassHandler.removeClass( this.options.successClass ).addClass( this.options.errorClass );
+        this.options.listeners.onFieldError( this.element, this.constraints );
         return false;
       }
 
@@ -580,7 +629,7 @@
     * @method reset
     */
     , reset: function () {
-      this.isValid = true;
+      this.isValid = null;
       this.removeErrors();
       this.errorClassHandler.removeClass( this.options.successClass ).removeClass( this.options.errorClass );
     }
@@ -609,7 +658,7 @@
 
       if ( !$( this.ulError ).length ) {
         this.options.errors.container( this.element, this.ulTemplate, this.isRadioOrCheckbox )
-          || !this.isRadioOrCheckbox ? this.$element.after( this.ulTemplate ) : this.$element.parent().after( this.ulTemplate );
+          || (!this.isRadioOrCheckbox ? this.$element.after( this.ulTemplate ) : this.$element.parent().after( this.ulTemplate ));
       }
 
       if ( !$( liError ).length ) {
@@ -895,9 +944,10 @@
       , errorElem: '<li></li>'                                            // each field constraint fail in an li
       }
     , listeners: {
-        onFieldValidate: function ( elem ) { return false; }              // Return true to ignore field validation
+        onFieldValidate: function ( elem ) { return false; }              // Executed on validation. Return true to ignore field validation
       , onFormSubmit: function ( isFormValid, event, focusedField ) {}    // Executed once on form validation
-      , onFieldError: function ( field, constraint ) {}                   // Executed when a field is detected as invalid
+      , onFieldError: function ( elem, constraints ) {}                   // Executed when a field is detected as invalid
+      , onFieldSuccess: function ( elem, constraints ) {}                 // Executed when a field passes validation
     }
   }
 
